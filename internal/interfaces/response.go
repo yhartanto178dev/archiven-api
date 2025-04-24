@@ -10,6 +10,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/yhartanto178dev/archiven-api/internal/archive/domain"
 	"github.com/yhartanto178dev/archiven-api/internal/configs"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Error response
@@ -33,6 +34,10 @@ var (
 	ErrInvalidPDF        = errors.New("invalid PDF structure")
 	ErrVirusDetected     = errors.New("virus detected")
 	ErrValidationTimeout = errors.New("validation timeout")
+	ErrArchiveNotFound   = errors.New("archive not found")
+	ErrDeleteNotAllowed  = errors.New("delete operation not allowed")
+	ErrAlreadyDeleted    = errors.New("archive already deleted")
+	ErrRestoreNotAllowed = errors.New("restore operation not allowed")
 )
 
 // Success response
@@ -41,11 +46,11 @@ const (
 )
 
 type ArchiveResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	SizeMB      string `json:"size_mb"`
-	DownloadURL string `json:"download_url"`
-	CreatedAt   string `json:"created_at"`
+	ID          primitive.ObjectID `json:"id"`
+	Name        string             `json:"name"`
+	SizeMB      string             `json:"size_mb"`
+	DownloadURL string             `json:"download_url"`
+	CreatedAt   string             `json:"created_at"`
 }
 
 func ToArchiveResponse(archive *domain.Archive) ArchiveResponse {
@@ -62,7 +67,7 @@ func ToArchiveResponse(archive *domain.Archive) ArchiveResponse {
 		ID:          archive.ID,
 		Name:        archive.Name,
 		SizeMB:      sizeMB,
-		DownloadURL: fmt.Sprintf("http://%s:%s/download/%s", cfg.Host, strconv.Itoa(cfg.ServerPort), archive.ID),
+		DownloadURL: fmt.Sprintf("http://%s:%s/download/%s", cfg.Host, strconv.Itoa(cfg.ServerPort), archive.ID.Hex()),
 		CreatedAt:   archive.CreatedAt.Format(time.RFC3339),
 	}
 }

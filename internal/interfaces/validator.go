@@ -88,6 +88,14 @@ func (v *FileValidator) MapDomainError(err error) *echo.HTTPError {
 		return echo.NewHTTPError(http.StatusBadRequest, "Tipe file tidak diizinkan")
 	case errors.Is(err, ErrInvalidPDF):
 		return echo.NewHTTPError(http.StatusUnprocessableEntity, "File PDF tidak valid")
+	case errors.Is(err, ErrArchiveNotFound):
+		return echo.NewHTTPError(http.StatusNotFound, "Archive not found")
+	case errors.Is(err, ErrDeleteNotAllowed):
+		return echo.NewHTTPError(http.StatusForbidden, "Delete operation not allowed")
+	case errors.Is(err, ErrAlreadyDeleted):
+		return echo.NewHTTPError(http.StatusConflict, "Archive already deleted")
+	case errors.Is(err, ErrRestoreNotAllowed):
+		return echo.NewHTTPError(http.StatusForbidden, "Restore operation not allowed")
 	default:
 		return echo.NewHTTPError(http.StatusInternalServerError, "Terjadi kesalahan server")
 	}

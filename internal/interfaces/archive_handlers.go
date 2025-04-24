@@ -1,6 +1,7 @@
 package interfaces
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -128,16 +129,23 @@ func (h *ArchiveHandler) List(c echo.Context) error {
 
 func (h *ArchiveHandler) Download(c echo.Context) error {
 	id := c.Param("id")
-	archive, content, err := h.service.GetArchive(c.Request().Context(), id)
+
+	_, buf, err := h.service.GetArchive(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "file not found"})
+		errBuilder := NewErrorResponseBuilder()
+		switch {
+		case errors.Is(err, domain.ErrArchiveNotFound):
+			return c.JSON(404, errBuilder(ResponseErrorFileNotFound))
+		case errors.Is(err, domain.ErrAlreadyDeleted):
+			return c.JSON(403, errBuilder("File has been deleted"))
+		case errors.Is(err, domain.ErrAlreadyExpire):
+			return c.JSON(403, errBuilder("File has expired"))
+		default:
+			return c.JSON(500, errBuilder(ResponseErrorGetArchive))
+		}
 	}
 
-	c.Response().Header().Set("Content-Disposition", "attachment; filename="+archive.Name)
-	c.Response().Header().Set("Content-Type", "application/octet-stream")
-	c.Response().Header().Set("Content-Length", strconv.FormatInt(archive.Size, 10))
-
-	return c.Blob(http.StatusOK, "application/octet-stream", content)
+	return c.Blob(200, "application/octet-stream", buf)
 }
 
 // Tambahkan handler baru
@@ -163,4 +171,43 @@ func (h *ArchiveHandler) GetByIDs(c echo.Context) error {
 		"data":  response,
 		"count": len(response),
 	})
+}
+
+func (h *ArchiveHandler) DeleteArchive(c echo.Context) error {
+	id := c.Param("id")
+	deleteType := getDeleteTypeFromParam(c)
+
+	if err := h.service.DeleteArchive(c.Request().Context(), id, deleteType); err != nil {
+		return h.validator.MapDomainError(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "File deleted successfully",
+		"type":    deleteType.String(),
+	})
+}
+
+func (h *ArchiveHandler) RestoreArchive(c echo.Context) error {
+	id := c.Param("id")
+
+	if err := h.service.RestoreArchive(c.Request().Context(), id); err != nil {
+		return h.validator.MapDomainError(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "File restored successfully",
+	})
+}
+
+func getDeleteTypeFromParam(c echo.Context) domain.DeleteType {
+	switch c.QueryParam("type") {
+	case "permanent":
+		return domain.HardDelete
+	case "temporary":
+		return domain.TempDelete
+	default:
+		return domain.SoftDelete
+	}
 }

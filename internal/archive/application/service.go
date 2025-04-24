@@ -29,3 +29,23 @@ func (s *ArchiveService) ListArchives(ctx context.Context, page, limit int) ([]d
 func (s *ArchiveService) GetArchivesByIDs(ctx context.Context, ids []string) ([]domain.Archive, error) {
 	return s.repo.FindByIDs(ctx, ids)
 }
+
+func (s *ArchiveService) DeleteArchive(ctx context.Context, id string, deleteType domain.DeleteType) error {
+	exists, err := s.repo.Exists(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return domain.ErrArchiveNotFound
+	}
+
+	return s.repo.Delete(ctx, id, deleteType)
+}
+
+func (s *ArchiveService) RestoreArchive(ctx context.Context, id string) error {
+	return s.repo.Restore(ctx, id)
+}
+
+func (s *ArchiveService) CleanupTempFiles(ctx context.Context) error {
+	return s.repo.DeleteExpiredTempFiles(ctx)
+}
