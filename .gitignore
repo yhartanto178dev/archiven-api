@@ -1,1 +1,12 @@
+# Environment variables
 .env
+
+# All log files and directories
+logs/
+*.log
+/logs
+/logs/**
+/logs/*.log
+
+# Keep logs directory but ignore contents
+!logs/.gitkeep
