@@ -1,6 +1,7 @@
 package interfaces
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -13,14 +14,25 @@ import (
 
 // Error response
 const (
-	ResponseErrorMultiprt      = "failed to parse multipart form"
+	ResponseErrorFileNotFound  = "failed file not found"
 	ResponseErrorOpenFile      = "failed to open file"
 	ResponseErrorUploadToMongo = "failed to upload file to MongoDB"
 	ResponseErrorListArchive   = "failed to get list archives"
 	ResponseErrorGetArchive    = "failed to get archive"
 	ResponseErrorLimitUpload   = "file size exceeds the limit"
 	ResponseErrorFileType      = "file type not allowed"
-	ResponseErrorFileNotFound  = "file not found"
+
+	ResponseErrorHeaderRead       = "failed to read header"
+	ResponseErrorValidationStages = "failed validation stage"
+)
+
+var (
+	ErrFileTooLarge      = errors.New("file too large")
+	ErrInvalidFileType   = errors.New("invalid file type")
+	ErrInvalidExtension  = errors.New("invalid file extension")
+	ErrInvalidPDF        = errors.New("invalid PDF structure")
+	ErrVirusDetected     = errors.New("virus detected")
+	ErrValidationTimeout = errors.New("validation timeout")
 )
 
 // Success response

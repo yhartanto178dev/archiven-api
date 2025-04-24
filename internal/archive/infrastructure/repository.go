@@ -12,6 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
 type ArchiveRepository struct {
@@ -20,8 +22,14 @@ type ArchiveRepository struct {
 }
 
 func NewArchiveRepository(client *mongo.Client, dbName string) (*ArchiveRepository, error) {
+	bucketOpts := options.GridFSBucket().
+		SetChunkSizeBytes(1024 * 1024).       // 1MB chunks
+		SetWriteConcern(writeconcern.W1()).   // Faster writes with basic durability
+		SetReadPreference(readpref.Primary()) // Read from primary for consistency
+
 	bucket, err := gridfs.NewBucket(
 		client.Database(dbName),
+		bucketOpts,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gridfs bucket: %v", err)

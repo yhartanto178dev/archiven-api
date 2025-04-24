@@ -3,10 +3,11 @@ package interfaces
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/yhartanto178dev/archiven-api/internal/archive/application"
 	"github.com/yhartanto178dev/archiven-api/internal/archive/domain"
-	"github.com/yhartanto178dev/archiven-api/internal/configs"
+	"go.uber.org/zap"
 
 	"github.com/labstack/echo/v4"
 )
@@ -14,17 +15,19 @@ import (
 // Error response
 
 type ArchiveHandler struct {
-	service       *application.ArchiveService
-	maxUploadSize int64
-	allowedTypes  []string
+	service   *application.ArchiveService
+	validator *FileValidator
+	logger    *zap.Logger
 }
 
-func NewArchiveHandler(service *application.ArchiveService, cfg *configs.Config) *ArchiveHandler {
-	return &ArchiveHandler{service: service, maxUploadSize: cfg.MaxUploadSize,
-		allowedTypes: cfg.AllowedTypes}
+func NewArchiveHandler(service *application.ArchiveService, validator *FileValidator,
+	logger *zap.Logger) *ArchiveHandler {
+	return &ArchiveHandler{service: service, validator: validator,
+		logger: logger}
 }
 
 func (h *ArchiveHandler) Upload(c echo.Context) error {
+	startTime := time.Now()
 	// Error NewErrorResponseBuilder
 	ErrorResponse := NewErrorResponseBuilder()
 	//SuccessResponse
@@ -33,16 +36,20 @@ func (h *ArchiveHandler) Upload(c echo.Context) error {
 
 	file, err := c.FormFile("file")
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse(ResponseErrorMultiprt))
+		return c.JSON(http.StatusBadRequest, ErrorResponse(ResponseErrorFileNotFound))
 	}
 
-	// Validasi ukuran file
-	if file.Size > h.maxUploadSize {
-		return c.JSON(http.StatusBadRequest, ErrorResponse(ResponseErrorLimitUpload))
+	// 2. Validasi file di handler
+	if err := h.validator.ValidateUpload(file); err != nil {
+		return h.validator.MapDomainError(err)
 	}
 
 	src, err := file.Open()
 	if err != nil {
+		h.logger.Error("Gagal membuka file",
+			zap.String("filename", file.Filename),
+			zap.Error(err),
+		)
 		return c.JSON(http.StatusBadRequest, ErrorResponse(ResponseErrorOpenFile))
 	}
 	defer src.Close()
@@ -50,12 +57,11 @@ func (h *ArchiveHandler) Upload(c echo.Context) error {
 	content := make([]byte, file.Size)
 	_, err = src.Read(content)
 	if err != nil {
+		h.logger.Error("Gagal membaca file",
+			zap.String("filename", file.Filename),
+			zap.Error(err),
+		)
 		return c.JSON(http.StatusInternalServerError, ErrorResponse(ResponseErrorOpenFile))
-	}
-
-	fileType := http.DetectContentType(content)
-	if !contains(h.allowedTypes, fileType) {
-		return c.JSON(http.StatusBadRequest, ErrorResponse(ResponseErrorFileType))
 	}
 
 	errUpload := h.service.UploadArchive(c.Request().Context(), domain.FileContent{
@@ -67,6 +73,10 @@ func (h *ArchiveHandler) Upload(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse(ResponseErrorUploadToMongo))
 	}
 
+	h.logger.Info("Upload berhasil",
+		zap.String("filename", file.Filename),
+		zap.Duration("duration", time.Since(startTime)),
+	)
 	// Return success response
 
 	return c.JSON(http.StatusCreated, SuccessResponse(ResponseSuccessUpload))
