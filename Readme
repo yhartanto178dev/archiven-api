@@ -1,0 +1,133 @@
+# 📁 Archiven API
+
+A modern digital archive management API with powerful file handling capabilities and flexible deletion strategies.
+
+## ✨ Key Features
+
+### 📋 File Management
+- Upload PDF files (up to 3MB)
+- Download files securely
+- List archives with pagination
+- Fetch archives by multiple IDs
+
+### 🗑️ Deletion System
+- Soft Delete - Hide files without removing them
+- Hard Delete - Permanent removal
+- Restore - Recover soft-deleted files
+- Auto-cleanup of expired files
+
+### 🛡️ Security & Performance
+- File validation (type, size, signature)
+- Protected download for deleted files
+- Comprehensive audit logging
+- Memory-efficient processing
+- Background cleanup tasks
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Go 1.21+
+- MongoDB 5.0+
+
+### Installation
+
+1. Clone the repository
+```bash
+git clone https://github.com/username/archiven-api.git
+cd archiven-api
+```
+
+2. Install dependencies
+```bash
+go mod download
+```
+
+3. Configure environment
+```bash
+cp .env.example .env
+```
+
+## 🔌 API Endpoints
+
+### Upload File
+```http
+POST /archives
+Content-Type: multipart/form-data
+```
+Response:
+```json
+{
+    "success": true,
+    "file_id": "665f3b8c6c8d8a1e9b3e1b1a",
+    "message": "File uploaded successfully"
+}
+```
+
+### List Archives
+```http
+GET /archives?page=1&limit=10&include_deleted=false
+```
+
+### Get Archives by IDs
+```http
+GET /archives/list?ids=id1,id2,id3
+```
+
+### Download File
+```http
+GET /download/:id
+```
+
+### Delete Archive
+```http
+DELETE /archives/:id              # Soft delete
+DELETE /archives/:id/permanent    # Hard delete
+```
+
+### Restore Archive
+```http
+POST /archives/:id/restore
+```
+
+## ⚙️ Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| SERVER_PORT | Application port | 8080 |
+| MONGODB_URI | MongoDB connection string | mongodb://localhost:27017 |
+| DB_NAME | Database name | archive_db |
+| HOST | Server host | localhost |
+| ALLOWED_TYPES | Allowed file types | application/pdf |
+| MAX_UPLOAD_SIZE | Max upload size in bytes | 3145728 (3MB) |
+| LOG_DIR | Log directory | logs |
+| LOG_FILE_FORMAT | Log filename format | 2006-01-02.log |
+| LOG_RETENTION_DAYS | Days to keep logs | 7 |
+| LOG_LEVEL | Logging level | info |
+
+## 📝 Usage Examples
+
+### Upload a PDF file
+```bash
+curl -X POST -F "file=@document.pdf" http://localhost:8080/archives
+```
+
+### Download a file
+```bash
+curl -OJ http://localhost:8080/download/665f3b8c6c8d8a1e9b3e1b1a
+```
+
+### Delete a file
+```bash
+curl -X DELETE http://localhost:8080/archives/665f3b8c6c8d8a1e9b3e1b1a
+```
+
+### Restore a file
+```bash
+curl -X POST http://localhost:8080/archives/665f3b8c6c8d8a1e9b3e1b1a/restore
+```
+
+## 📄 License
+MIT License
+
+
+
