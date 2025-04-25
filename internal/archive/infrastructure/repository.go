@@ -736,29 +736,3 @@ func (r *ArchiveRepository) GetByTags(ctx context.Context, tags []string, page, 
 func (r *ArchiveRepository) CountDocuments(ctx context.Context, filter bson.M) (int64, error) {
 	return r.bucket.GetFilesCollection().CountDocuments(ctx, filter)
 }
-
-func (r *ArchiveRepository) findArchives(ctx context.Context, filter bson.M, page, limit int) ([]domain.Archive, int64, error) {
-	// Hitung total dokumen
-	total, err := r.CountDocuments(ctx, filter)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// Query dengan pagination
-	opts := options.Find().
-		SetSkip(int64((page - 1) * limit)).
-		SetLimit(int64(limit)).
-		SetSort(bson.D{{Key: "created_at", Value: -1}})
-
-	cur, err := r.bucket.GetFilesCollection().Find(ctx, filter, opts)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	var archives []domain.Archive
-	if err = cur.All(ctx, &archives); err != nil {
-		return nil, 0, err
-	}
-
-	return archives, total, nil
-}
