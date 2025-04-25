@@ -87,11 +87,10 @@ func (h *ArchiveHandler) Upload(c echo.Context) error {
 		zap.Duration("duration", time.Since(startTime)),
 	)
 	// Return success response
-	SuccessResponseData := map[string]interface{}{
-		"id":      archive.ID,
+	SuccessResponseData := NewSuccessResponseWithDataVersion(map[string]interface{}{
 		"version": archive.Version,
 		"isNew":   archive.Version == 1,
-	}
+	})
 
 	return c.JSON(http.StatusCreated, SuccessResponseData)
 }

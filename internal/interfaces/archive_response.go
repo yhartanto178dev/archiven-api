@@ -105,10 +105,10 @@ func NewSuccessResponseBuilder() SuccessResponseBuilder {
 	}
 }
 
-// type SuccessResponseWithDataVersion struct {
-// 	Status string      `json:"status"`
-// 	Data   DataResponseVersion`json:"data"`
-// }
+type SuccessResponseWithDataVersion struct {
+	Status string                 `json:"status"`
+	Data   map[string]interface{} `json:"data"`
+}
 
 // type DataResponseVersion struct {
 // 	ID        primitive.ObjectID `json:"archive_id"`
@@ -116,13 +116,9 @@ func NewSuccessResponseBuilder() SuccessResponseBuilder {
 // 	IsNew    bool               `json:"is_new"`
 // }
 
-// func NewSuccessResponseWithDataVersion(id primitive.ObjectID, version int, isNew bool) SuccessResponseWithDataVersion {
-// 	return SuccessResponseWithDataVersion{
-// 		Status: "success",
-// 		Data: DataResponseVersion{
-// 			ID:      id,
-// 			Version: version,
-// 			IsNew:   isNew,
-// 		},
-// 	}
-// }
+func NewSuccessResponseWithDataVersion(data map[string]interface{}) SuccessResponseWithDataVersion {
+	return SuccessResponseWithDataVersion{
+		Status: "success",
+		Data:   data,
+	}
+}
