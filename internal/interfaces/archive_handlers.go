@@ -206,29 +206,56 @@ func (h *ArchiveHandler) GetByIDs(c echo.Context) error {
 
 func (h *ArchiveHandler) DeleteArchive(c echo.Context) error {
 	id := c.Param("id")
-	deleteType := getDeleteTypeFromParam(c)
+	permanent := c.Path() == "/archives/:id/permanent"
+	ErrorResponse := NewErrorResponseBuilder()
 
-	if err := h.service.DeleteArchive(c.Request().Context(), id, deleteType); err != nil {
-		return h.validator.MapDomainError(err)
+	ctx := c.Request().Context()
+
+	// Convert permanent bool to DeleteType
+	deleteType := domain.SoftDelete
+	if permanent {
+		deleteType = domain.HardDelete
+	}
+
+	err := h.service.DeleteArchive(ctx, id, deleteType)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrArchiveNotFound):
+			return c.JSON(http.StatusNotFound, ErrorResponse(ResponseErrorFileNotFound))
+		case errors.Is(err, domain.ErrAlreadyDeleted):
+			return c.JSON(http.StatusBadRequest, ErrorResponse("File already deleted"))
+		default:
+			return c.JSON(http.StatusInternalServerError, ErrorResponse("Failed to delete file"))
+		}
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "File deleted successfully",
-		"type":    deleteType.String(),
+		"status": "success",
+		"data": map[string]interface{}{
+			"message":   "File deleted successfully",
+			"permanent": permanent,
+			"id":        id,
+		},
 	})
 }
 
 func (h *ArchiveHandler) RestoreArchive(c echo.Context) error {
 	id := c.Param("id")
+	//ErrorResponse := NewErrorResponseBuilder()
 
-	if err := h.service.RestoreArchive(c.Request().Context(), id); err != nil {
-		return h.validator.MapDomainError(err)
+	err := h.service.RestoreArchive(c.Request().Context(), id)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
 	}
-
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "File restored successfully",
+		"status": "success",
+		"data": map[string]interface{}{
+			"message": "File restored successfully",
+			"id":      id,
+		},
 	})
 }
 

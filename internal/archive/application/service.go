@@ -72,7 +72,7 @@ func (s *ArchiveService) DeleteArchive(ctx context.Context, id string, deleteTyp
 }
 
 func (s *ArchiveService) RestoreArchive(ctx context.Context, id string) error {
-	return s.repo.Restore(ctx, id)
+	return s.repo.RestoreArchive(ctx, id)
 }
 
 func (s *ArchiveService) CleanupTempFiles(ctx context.Context) error {

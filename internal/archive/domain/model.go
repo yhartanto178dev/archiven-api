@@ -69,7 +69,7 @@ type ArchiveRepository interface {
 	FindAll(ctx context.Context, page, limit int) ([]Archive, int64, error)
 	FindByIDs(ctx context.Context, ids []string) ([]Archive, error)
 	Delete(ctx context.Context, id string, deleteType DeleteType) error
-	Restore(ctx context.Context, id string) error
+	RestoreArchive(ctx context.Context, id string) error
 	Exists(ctx context.Context, id string) (bool, error)
 	DeleteExpiredTempFiles(ctx context.Context) error
 	FindExistingArchive(ctx context.Context, archive Archive) (*Archive, error)
@@ -112,6 +112,7 @@ var (
 	ErrAlreadyExpire     = errors.New("archive already expired")
 	ErrInvalidCategory   = errors.New("invalid category")
 	ErrTagsRequired      = errors.New("tags are required")
+	ErrNotDeleted        = errors.New("archive not deleted")
 )
 
 func (dt DeleteType) String() string {

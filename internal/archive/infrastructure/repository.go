@@ -336,29 +336,76 @@ func (r *ArchiveRepository) tempDelete(ctx context.Context, id primitive.ObjectI
 	return err
 }
 
-func (r *ArchiveRepository) Restore(ctx context.Context, id string) error {
+func (r *ArchiveRepository) RestoreArchive(ctx context.Context, id string) error {
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid object ID: %v", err)
 	}
 
-	result := r.bucket.GetFilesCollection().FindOneAndUpdate(
+	// Find the file first with proper filter
+	filter := bson.M{
+		"_id":        objID,
+		"deleted_at": bson.M{"$exists": true, "$ne": nil},
+	}
+
+	var result bson.M
+	err = r.bucket.GetFilesCollection().FindOne(ctx, filter).Decode(&result)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return domain.ErrNotDeleted
+		}
+		return fmt.Errorf("failed to find document: %v", err)
+	}
+
+	now := time.Now()
+	changeLog := domain.ChangeLog{
+		Timestamp: now,
+		Action:    "restore",
+		UserID:    result["metadata"].(bson.M)["owner_id"].(string),
+		Changes: []domain.Change{
+			{
+				Field:    "status",
+				OldValue: "deleted",
+				NewValue: "active",
+			},
+		},
+	}
+
+	// Get existing change logs and append new one
+	var changeLogs []domain.ChangeLog
+	if logs, ok := result["metadata"].(bson.M)["change_logs"].(primitive.A); ok {
+		for _, l := range logs {
+			if log, ok := l.(bson.M); ok {
+				changeLogs = append(changeLogs, domain.ChangeLog{
+					Timestamp: log["timestamp"].(primitive.DateTime).Time(),
+					Action:    log["action"].(string),
+					UserID:    log["user_id"].(string),
+				})
+			}
+		}
+	}
+	changeLogs = append(changeLogs, changeLog)
+
+	// Update document - remove deleted_at field
+	update := bson.M{
+		"$set": bson.M{
+			"metadata.change_logs": changeLogs,
+			"metadata.updated_at":  now,
+		},
+		"$unset": bson.M{
+			"deleted_at": "",
+		},
+	}
+
+	_, err = r.bucket.GetFilesCollection().UpdateOne(
 		ctx,
 		bson.M{"_id": objID},
-		bson.M{"$unset": bson.M{
-			"deleted_at": "",
-			"expires_at": "",
-			"is_temp":    "",
-		}},
-		options.FindOneAndUpdate().SetReturnDocument(options.After),
+		update,
 	)
-
-	if result.Err() != nil {
-		if errors.Is(result.Err(), mongo.ErrNoDocuments) {
-			return domain.ErrArchiveNotFound
-		}
-		return result.Err()
+	if err != nil {
+		return fmt.Errorf("failed to update document: %v", err)
 	}
+
 	return nil
 }
 
@@ -735,4 +782,78 @@ func (r *ArchiveRepository) GetByTags(ctx context.Context, tags []string, page, 
 
 func (r *ArchiveRepository) CountDocuments(ctx context.Context, filter bson.M) (int64, error) {
 	return r.bucket.GetFilesCollection().CountDocuments(ctx, filter)
+}
+
+func (r *ArchiveRepository) DeleteArchive(ctx context.Context, id string, permanent bool, userID string) error {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return fmt.Errorf("invalid object ID: %v", err)
+	}
+
+	// Find the existing file first
+	var result bson.M
+	err = r.bucket.GetFilesCollection().FindOne(ctx, bson.M{"_id": objID}).Decode(&result)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return domain.ErrArchiveNotFound
+		}
+		return fmt.Errorf("failed to find document: %v", err)
+	}
+
+	now := time.Now()
+	metadata := result["metadata"].(bson.M)
+
+	if permanent {
+		// Permanent delete - remove file completely
+		if err := r.bucket.Delete(objID); err != nil {
+			return fmt.Errorf("failed to delete file: %v", err)
+		}
+		return nil
+	}
+
+	// Soft delete - update metadata
+	changeLog := domain.ChangeLog{
+		Timestamp: now,
+		Action:    "delete",
+		UserID:    userID,
+		Changes: []domain.Change{
+			{
+				Field:    "status",
+				OldValue: "active",
+				NewValue: "deleted",
+			},
+		},
+	}
+
+	// Get existing change logs
+	var changeLogs []domain.ChangeLog
+	if logs, ok := metadata["change_logs"].(primitive.A); ok {
+		for _, l := range logs {
+			if log, ok := l.(bson.M); ok {
+				changeLogs = append(changeLogs, domain.ChangeLog{
+					Timestamp: log["timestamp"].(primitive.DateTime).Time(),
+					Action:    log["action"].(string),
+					UserID:    log["user_id"].(string),
+				})
+			}
+		}
+	}
+	changeLogs = append(changeLogs, changeLog)
+
+	// Update metadata
+	update := bson.M{
+		"$set": bson.M{
+			"metadata.deleted_at":  now,
+			"metadata.change_logs": changeLogs,
+			"metadata.deleted_by":  userID,
+			"metadata.updated_at":  now,
+		},
+	}
+
+	_, err = r.bucket.GetFilesCollection().UpdateOne(ctx, bson.M{"_id": objID}, update)
+	if err != nil {
+		return fmt.Errorf("failed to update document: %v", err)
+	}
+
+	return nil
 }
