@@ -14,8 +14,37 @@ func NewArchiveService(repo domain.ArchiveRepository) *ArchiveService {
 	return &ArchiveService{repo: repo}
 }
 
-func (s *ArchiveService) UploadArchive(ctx context.Context, file domain.FileContent) error {
-	return s.repo.Save(ctx, file)
+func (s *ArchiveService) UploadArchive(ctx context.Context, file domain.FileContent, metadata domain.ArchiveMetadata) (*domain.Archive, error) {
+	// Validasi unik
+	existing, err := s.repo.FindExistingArchive(ctx, domain.Archive{
+		Name:     file.Name,
+		Category: metadata.Category,
+		Type:     metadata.Type,
+		Tags:     metadata.Tags,
+		OwnerID:  metadata.OwnerID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	archive := domain.Archive{
+		Name:        file.Name,
+		Size:        file.Size,
+		Category:    metadata.Category,
+		Type:        metadata.Type,
+		Tags:        metadata.Tags,
+		Description: metadata.Description,
+		OwnerID:     metadata.OwnerID,
+	}
+
+	// Jika sudah ada, update versi
+	if existing != nil {
+		archive.ID = existing.ID
+		archive.Version = existing.Version + 1
+		archive.CreatedAt = existing.CreatedAt
+	}
+
+	return s.repo.SaveWithVersioning(ctx, archive, file.Content)
 }
 
 func (s *ArchiveService) GetArchive(ctx context.Context, id string) (*domain.Archive, []byte, error) {
@@ -48,4 +77,26 @@ func (s *ArchiveService) RestoreArchive(ctx context.Context, id string) error {
 
 func (s *ArchiveService) CleanupTempFiles(ctx context.Context) error {
 	return s.repo.DeleteExpiredTempFiles(ctx)
+}
+
+func (s *ArchiveService) GetHistory(ctx context.Context, id string) (*domain.History, error) {
+	return s.repo.GetHistory(ctx, id)
+}
+
+func (s *ArchiveService) GetByCategory(ctx context.Context, category string, page, limit int) ([]domain.Archive, int64, error) {
+	if category == "" {
+		return nil, 0, domain.ErrInvalidCategory
+	}
+	return s.repo.GetByCategory(ctx, category, page, limit)
+}
+
+func (s *ArchiveService) GetByTags(ctx context.Context, tags []string, page, limit int) ([]domain.Archive, int64, error) {
+	if len(tags) == 0 {
+		return nil, 0, domain.ErrTagsRequired
+	}
+	return s.repo.GetByTags(ctx, tags, page, limit)
+}
+
+func (s *ArchiveService) UpdateArchive(ctx context.Context, archive domain.Archive, content []byte) (*domain.Archive, error) {
+	return s.repo.SaveWithVersioning(ctx, archive, content)
 }

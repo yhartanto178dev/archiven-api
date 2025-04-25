@@ -7,6 +7,8 @@ import (
 	"github.com/yhartanto178dev/archiven-api/internal/archive/application"
 	"github.com/yhartanto178dev/archiven-api/internal/archive/infrastructure"
 	"github.com/yhartanto178dev/archiven-api/internal/configs"
+	middlewares "github.com/yhartanto178dev/archiven-api/internal/interfaces/middleware"
+
 	"go.uber.org/zap"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -34,11 +36,18 @@ func RegisterRoutes(e *echo.Echo, client *mongo.Client, cfg *configs.Config, log
 	startCleanupTask(service, 1*time.Hour, logger)
 	// Register routes
 	// Routes
-	e.POST("/archives", handler.Upload)
+	e.POST("/archives", handler.Upload, middlewares.AuthMiddleware)
 	e.GET("/archives", handler.List)
 	e.GET("/download/:id", handler.Download)
 	e.GET("/archives/list", handler.GetByIDs)
 	e.DELETE("/archives/:id", handler.DeleteArchive)
 	e.DELETE("/archives/:id/permanent", handler.DeleteArchive)
 	e.POST("/archives/:id/restore", handler.RestoreArchive)
+	e.GET("/archives/:id/history", handler.GetHistory)
+
+	// Get by category
+	e.GET("/archives/category/:category", handler.GetByCategory)
+
+	// Get by tags
+	e.GET("/archives/tags", handler.GetByTags)
 }

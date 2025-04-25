@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/labstack/echo/v4"
+	"github.com/yhartanto178dev/archiven-api/internal/archive/domain"
 	"go.uber.org/zap"
 )
 
@@ -73,6 +74,30 @@ func (v *FileValidator) ValidateUpload(file *multipart.FileHeader) error {
 			zap.String("mime", mimeType),
 		)
 		return ErrInvalidFileType
+	}
+
+	return nil
+}
+
+func (v *FileValidator) ValidateMetadata(metadata domain.ArchiveMetadata) error {
+	// Validasi kategori
+	if metadata.Category == "" {
+		return ErrCategoryRequired
+	}
+
+	// Validasi jenis
+	if metadata.Type == "" {
+		return ErrTypeRequired
+	}
+
+	// Validasi tags
+	if len(metadata.Tags) == 0 {
+		return ErrTagsRequired
+	}
+
+	// Validasi maksimal 5 tags
+	if len(metadata.Tags) > 5 {
+		return ErrTooManyTags
 	}
 
 	return nil
