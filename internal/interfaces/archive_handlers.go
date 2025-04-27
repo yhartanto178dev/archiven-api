@@ -259,17 +259,6 @@ func (h *ArchiveHandler) RestoreArchive(c echo.Context) error {
 	})
 }
 
-func getDeleteTypeFromParam(c echo.Context) domain.DeleteType {
-	switch c.QueryParam("type") {
-	case "permanent":
-		return domain.HardDelete
-	case "temporary":
-		return domain.TempDelete
-	default:
-		return domain.SoftDelete
-	}
-}
-
 func (h *ArchiveHandler) GetHistory(c echo.Context) error {
 	id := c.Param("id")
 	ErrorResponse := NewErrorResponseBuilder()
