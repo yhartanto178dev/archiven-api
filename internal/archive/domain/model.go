@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -77,6 +78,8 @@ type ArchiveRepository interface {
 	GetHistory(ctx context.Context, id string) (*History, error)
 	GetByCategory(ctx context.Context, category string, page, limit int) ([]Archive, int64, error)
 	GetByTags(ctx context.Context, tags []string, page, limit int) ([]Archive, int64, error)
+	DeleteExpiredFiles(ctx context.Context) (int64, error)
+	DeleteByFilter(ctx context.Context, filter bson.M) (int64, error)
 }
 
 type FileContent struct {

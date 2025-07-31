@@ -2,8 +2,10 @@ package application
 
 import (
 	"context"
+	"time"
 
 	"github.com/yhartanto178dev/archiven-api/internal/archive/domain"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type ArchiveService struct {
@@ -75,8 +77,18 @@ func (s *ArchiveService) RestoreArchive(ctx context.Context, id string) error {
 	return s.repo.RestoreArchive(ctx, id)
 }
 
-func (s *ArchiveService) CleanupTempFiles(ctx context.Context) error {
-	return s.repo.DeleteExpiredTempFiles(ctx)
+func (s *ArchiveService) CleanupExpiredFiles(ctx context.Context) (int64, error) {
+	return s.repo.DeleteExpiredFiles(ctx)
+}
+
+func (s *ArchiveService) CleanupTempFiles(ctx context.Context) (int64, error) {
+	filter := bson.M{
+		"metadata.is_temp": true,
+		"metadata.created_at": bson.M{
+			"$lt": time.Now().Add(-24 * time.Hour),
+		},
+	}
+	return s.repo.DeleteByFilter(ctx, filter)
 }
 
 func (s *ArchiveService) GetHistory(ctx context.Context, id string) (*domain.History, error) {

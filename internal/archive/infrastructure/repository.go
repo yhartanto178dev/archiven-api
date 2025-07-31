@@ -433,6 +433,26 @@ func (r *ArchiveRepository) DeleteExpiredTempFiles(ctx context.Context) error {
 	return err
 }
 
+func (r *ArchiveRepository) DeleteExpiredFiles(ctx context.Context) (int64, error) {
+	result, err := r.bucket.GetFilesCollection().DeleteMany(ctx, bson.M{
+		"metadata.expires_at": bson.M{
+			"$lt": time.Now(),
+		},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete expired files: %v", err)
+	}
+	return result.DeletedCount, nil
+}
+
+func (r *ArchiveRepository) DeleteByFilter(ctx context.Context, filter bson.M) (int64, error) {
+	result, err := r.bucket.GetFilesCollection().DeleteMany(ctx, filter)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete files: %v", err)
+	}
+	return result.DeletedCount, nil
+}
+
 func mapToArchive(file bson.M) domain.Archive {
 	metadata, ok := file["metadata"].(bson.M)
 	if !ok {
