@@ -1,0 +1,970 @@
+openapi: 3.0.3
+info:
+  title: Archive API
+  description: |
+    Archive API with JWT RSA Authentication
+    
+    This API provides secure file archive management with JWT authentication using RSA keys.
+    Features include file upload, download, categorization, tagging, and comprehensive user management.
+    
+    ## Authentication
+    This API uses JWT (JSON Web Tokens) with RSA signatures for authentication.
+    - Access tokens expire in 15 minutes
+    - Refresh tokens expire in 7 days
+    - Tokens are also stored as HTTP-only cookies for enhanced security
+    
+    ## Authorization Header
+    Include the access token in the Authorization header:
+    ```
+    Authorization: Bearer <access_token>
+    ```
+    
+    ## File Upload
+    - Maximum file size: 50MB
+    - Supported formats: PDF only
+    - Files are stored in MongoDB GridFS
+    
+  version: 1.0.0
+  contact:
+    name: Archive API Support
+    email: support@archiveapi.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://api.archiveapi.com
+    description: Production server
+
+tags:
+  - name: Health
+    description: Health check endpoint
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Archives
+    description: File archive management
+  - name: User Profile
+    description: User profile management
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the API is running and healthy
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2025-08-01T10:30:00Z"
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user and receive access and refresh tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  example: "admin"
+                password:
+                  type: string
+                  example: "admin123"
+                device_id:
+                  type: string
+                  description: Optional device identifier
+                  example: "device-123"
+      responses:
+        '200':
+          description: Login successful
+          headers:
+            Set-Cookie:
+              description: HTTP-only cookies for access and refresh tokens
+              schema:
+                type: string
+                example: "access_token=eyJ...; HttpOnly; Secure; SameSite=Strict"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                        example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      expires_in:
+                        type: integer
+                        example: 900
+                        description: Token expiration time in seconds
+                      token_type:
+                        type: string
+                        example: "Bearer"
+                      user:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh access token
+      description: Get a new access token using refresh token (from cookie or request body)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  description: Refresh token (if not provided via cookie)
+                  example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        '200':
+          description: Token refreshed successfully
+          headers:
+            Set-Cookie:
+              description: Updated HTTP-only cookies
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                        example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      expires_in:
+                        type: integer
+                        example: 900
+                      token_type:
+                        type: string
+                        example: "Bearer"
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout user
+      description: Logout user and revoke current refresh token
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          headers:
+            Set-Cookie:
+              description: Cleared authentication cookies
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Successfully logged out"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/profile:
+    get:
+      tags:
+        - User Profile
+      summary: Get user profile
+      description: Get current user's profile information
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/logout-all:
+    post:
+      tags:
+        - User Profile
+      summary: Logout from all devices
+      description: Logout user from all devices and revoke all refresh tokens
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logged out from all devices successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Successfully logged out from all devices"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/archives:
+    post:
+      tags:
+        - Archives
+      summary: Upload file
+      description: Upload a new file to the archive
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - category
+                - type
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: PDF file to upload (max 50MB)
+                category:
+                  type: string
+                  example: "documents"
+                  description: File category
+                type:
+                  type: string
+                  example: "contract"
+                  description: File type
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  example: ["important", "legal"]
+                  description: File tags (max 5)
+                description:
+                  type: string
+                  example: "Contract document for project X"
+                  description: File description
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "File uploaded successfully"
+                  data:
+                    $ref: '#/components/schemas/Archive'
+        '400':
+          description: Invalid request or file validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - Archives
+      summary: List archives
+      description: Get a list of all archives with optional filtering
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 10
+        - name: category
+          in: query
+          description: Filter by category
+          schema:
+            type: string
+        - name: type
+          in: query
+          description: Filter by type
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Search in file names and descriptions
+          schema:
+            type: string
+        - name: tags
+          in: query
+          description: Filter by tags (comma-separated)
+          schema:
+            type: string
+        - name: include_deleted
+          in: query
+          description: Include soft-deleted files
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Archives retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Archive'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/archives/{id}/download:
+    get:
+      tags:
+        - Archives
+      summary: Download file
+      description: Download a specific file by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Archive ID
+          schema:
+            type: string
+            example: "60d5ecb54b24a12d8c5f1234"
+      responses:
+        '200':
+          description: File downloaded successfully
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              description: Attachment filename
+              schema:
+                type: string
+                example: 'attachment; filename="document.pdf"'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/archives/{id}:
+    delete:
+      tags:
+        - Archives
+      summary: Soft delete archive
+      description: Soft delete an archive (can be restored)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Archive ID
+          schema:
+            type: string
+            example: "60d5ecb54b24a12d8c5f1234"
+      responses:
+        '200':
+          description: Archive deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Archive deleted successfully"
+        '404':
+          description: Archive not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/archives/{id}/permanent:
+    delete:
+      tags:
+        - Archives
+      summary: Permanently delete archive
+      description: Permanently delete an archive (cannot be restored)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Archive ID
+          schema:
+            type: string
+            example: "60d5ecb54b24a12d8c5f1234"
+      responses:
+        '200':
+          description: Archive permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Archive permanently deleted"
+        '404':
+          description: Archive not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/archives/{id}/restore:
+    post:
+      tags:
+        - Archives
+      summary: Restore deleted archive
+      description: Restore a soft-deleted archive
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Archive ID
+          schema:
+            type: string
+            example: "60d5ecb54b24a12d8c5f1234"
+      responses:
+        '200':
+          description: Archive restored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Archive restored successfully"
+                  data:
+                    $ref: '#/components/schemas/Archive'
+        '404':
+          description: Archive not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: Archive cannot be restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/archives/{id}/history:
+    get:
+      tags:
+        - Archives
+      summary: Get archive history
+      description: Get the change history of a specific archive
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Archive ID
+          schema:
+            type: string
+            example: "60d5ecb54b24a12d8c5f1234"
+      responses:
+        '200':
+          description: Archive history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    $ref: '#/components/schemas/ArchiveHistory'
+        '404':
+          description: Archive not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/archives/category/{category}:
+    get:
+      tags:
+        - Archives
+      summary: Get archives by category
+      description: Get all archives in a specific category
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: path
+          required: true
+          description: Category name
+          schema:
+            type: string
+            example: "documents"
+      responses:
+        '200':
+          description: Archives retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Archive'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/archives/tags:
+    get:
+      tags:
+        - Archives
+      summary: Get archives by tags
+      description: Get archives filtered by tags
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: tags
+          in: query
+          required: true
+          description: Comma-separated list of tags
+          schema:
+            type: string
+            example: "important,legal"
+      responses:
+        '200':
+          description: Archives retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Archive'
+        '400':
+          description: Tags parameter required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/archives/bulk:
+    post:
+      tags:
+        - Archives
+      summary: Get archives by IDs
+      description: Get multiple archives by their IDs
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - ids
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                  example: ["60d5ecb54b24a12d8c5f1234", "60d5ecb54b24a12d8c5f5678"]
+                  description: Array of archive IDs
+      responses:
+        '200':
+          description: Archives retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Archive'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT access token for authentication.
+        Example: `Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...`
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "60d5ecb54b24a12d8c5f1234"
+        username:
+          type: string
+          example: "admin"
+        email:
+          type: string
+          format: email
+          example: "admin@example.com"
+        role:
+          type: string
+          example: "admin"
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-01-01T00:00:00Z"
+
+    Archive:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "60d5ecb54b24a12d8c5f1234"
+        name:
+          type: string
+          example: "contract.pdf"
+        size:
+          type: integer
+          format: int64
+          example: 1048576
+        size_mb:
+          type: string
+          example: "1.00 MB"
+        category:
+          type: string
+          example: "documents"
+        type:
+          type: string
+          example: "contract"
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["important", "legal"]
+        description:
+          type: string
+          example: "Contract document for project X"
+        owner_id:
+          type: string
+          example: "60d5ecb54b24a12d8c5f5678"
+        version:
+          type: integer
+          example: 1
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-01-01T00:00:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-01T00:00:00Z"
+        is_temp:
+          type: boolean
+          example: false
+
+    ArchiveHistory:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "60d5ecb54b24a12d8c5f1234"
+        file_name:
+          type: string
+          example: "contract.pdf"
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryEntry'
+
+    HistoryEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-01-01T00:00:00Z"
+        action:
+          type: string
+          enum: [upload, update, delete, restore]
+          example: "upload"
+        user:
+          type: string
+          example: "admin"
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Change'
+
+    Change:
+      type: object
+      properties:
+        field:
+          type: string
+          example: "category"
+        old_value:
+          type: string
+          nullable: true
+          example: "old_category"
+        new_value:
+          type: string
+          example: "new_category"
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          example: 100
+        total_pages:
+          type: integer
+          example: 10
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "error"
+        message:
+          type: string
+          example: "Error description"
+        error_code:
+          type: string
+          example: "INVALID_REQUEST"
+          nullable: true
+
+security:
+  - BearerAuth: []

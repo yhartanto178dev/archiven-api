@@ -1,0 +1,6 @@
+# RSA Keys
+keys/
+*.pem
+
+# JWT Tokens
+*.jwt
